@@ -5,10 +5,14 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -p 3005",
     "lint": "eslint"
   },
   "dependencies": {
+    "html-entities": "^2.6.0",
+    "jszip": "^3.10.1",
+    "lucide-react": "^1.55.0",
+    "msedge-tts": "^2.0.9",
     "next": "16.4.0",
     "react": "19.3.0",
     "react-dom": "19.3.0"

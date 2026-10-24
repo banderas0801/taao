@@ -78,7 +78,7 @@ run('git add src/ scripts/ .gitignore');
 // Bước 4: Kiểm tra staging diff
 console.log('\n[4/6] KIỂM TRA BẢO MẬT (Các file chuẩn bị commit):');
 console.log('----------------------------------------------------------------------');
-run('git diff --cached --stat');
+run('git --no-pager diff --cached --stat');
 console.log('----------------------------------------------------------------------');
 console.log('🔒 Đảm bảo KHÔNG có file scratch/, sync_to_vps.cjs hay file mật khẩu nào.');
 

@@ -27,6 +27,7 @@ import json
 import wave
 import tempfile
 import asyncio
+import uuid
 import subprocess
 from pathlib import Path
 from typing import Optional, Tuple
@@ -62,8 +63,15 @@ try:
         RMS_THRESHOLD = float(thresholds_cfg.get("RMS_THRESHOLD", 350.0))
         print(f"[VieNeu] Đã nạp ngưỡng từ audio_thresholds.json: {MIN_DURATION_SEC}s - {MAX_DURATION_SEC}s (Tiếng nói >= {MIN_SPEECH_SEC}s)")
 except Exception as err:
-    print(f"[VieNeu Warning] Không thể đọc audio_thresholds.json ({err}), sử dụng hằng số mặc định.")
-    MIN_DURATION_SEC, MAX_DURATION_SEC, MIN_SPEECH_SEC, RMS_THRESHOLD = 5.0, 8.0, 3.5, 350.0
+    print(f"[VieNeu FATAL] Không thể đọc audio_thresholds.json ({err}). Thoát (sys.exit 1).", file=sys.stderr)
+    sys.exit(1)
+
+# Giới hạn kích thước đầu vào
+MAX_AUDIO_BYTES = 2 * 1024 * 1024  # ~2MB sau khi decode base64
+MAX_AUDIO_B64_CHARS = (MAX_AUDIO_BYTES * 4) // 3 + 16
+MAX_TEXT_CHARS = 5000
+EXPECTED_EMB_SHAPE = (192,)
+EXPECTED_STYLE_SHAPE = (50, 256)
 
 app = FastAPI(title="VieNeu v3 Nano Service", docs_url=None, redoc_url=None)
 
@@ -148,18 +156,8 @@ def analyze_audio_duration_and_speech(wav_path: Path) -> Tuple[float, float]:
             speech_duration = active_speech_frames / float(framerate)
             return round(total_duration, 2), round(speech_duration, 2)
     except Exception as e:
-        print(f"[VAD Warning] Lỗi đọc wave: {e}")
-        try:
-            cmd = [
-                "ffprobe", "-v", "error", "-show_entries",
-                "format=duration", "-of", "default=noprint_wrappers=1:nokey=1",
-                str(wav_path)
-            ]
-            res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
-            dur = float(res.stdout.strip())
-            return dur, dur * 0.7
-        except Exception:
-            return 0.0, 0.0
+        # Không đoán thời lượng tiếng nói: WAV không đọc được -> 400
+        raise HTTPException(status_code=400, detail=f"Không đọc được file WAV đã chuẩn hoá: {e}")
 
 
 def normalize_audio_to_wav(input_bytes: bytes) -> Path:
@@ -192,52 +190,50 @@ def normalize_audio_to_wav(input_bytes: bytes) -> Path:
                 pass
 
 
+def _pick(d: dict, *keys):
+    for k in keys:
+        v = d.get(k)
+        if v is not None:
+            return v
+    return None
+
+
 def extract_speaker_embedding_and_style(wav_path: Path) -> Tuple[np.ndarray, np.ndarray]:
     """
-    Gọi trực tiếp phương thức encode_reference của VieNeu SDK để lấy nguyên bản
-    cấu trúc embedding (192-dim) và style (dạng 50x256 của model v3nano).
-    Lưu nguyên vẹn output của SDK, không gọt cắt hay hardcode kích thước.
+    Gọi encode_reference của VieNeu SDK (v3nano) để lấy embedding (192,) + style (50, 256).
+    KHÔNG có fallback: SDK lỗi / thiếu hàm / sai shape -> HTTP 500, không lưu artifact.
     """
     global vieneu_model
+    encode = getattr(vieneu_model, "encode_reference", None)
+    if not callable(encode):
+        print("[VieNeu SDK ERROR] Model không có encode_reference(); hãy chạy scripts/probe_vieneu_shapes.py để xác nhận API.", file=sys.stderr)
+        raise HTTPException(status_code=500, detail="VieNeu SDK thiếu encode_reference() — không thể clone giọng")
     try:
-        if hasattr(vieneu_model, "encode_reference"):
-            ref_output = vieneu_model.encode_reference(str(wav_path))
-            if isinstance(ref_output, tuple) and len(ref_output) >= 2:
-                emb, style = ref_output[0], ref_output[1]
-            elif isinstance(ref_output, dict):
-                emb = ref_output.get("embedding") or ref_output.get("speaker_embedding") or ref_output.get("emb")
-                style = ref_output.get("style") or ref_output.get("style_embedding")
-            else:
-                emb, style = ref_output, np.empty((0,), dtype=np.float32)
-
-            emb_arr = np.asarray(emb, dtype=np.float32)
-            style_arr = np.asarray(style, dtype=np.float32)
-            assert emb_arr.ndim >= 1, f"Embedding array không hợp lệ: ndim={emb_arr.ndim}"
-            return emb_arr, style_arr
-
-        elif hasattr(vieneu_model, "extract_embedding"):
-            emb = vieneu_model.extract_embedding(str(wav_path))
-            emb_arr = np.asarray(emb, dtype=np.float32)
-            style_arr = np.zeros((50, 256), dtype=np.float32)
-            return emb_arr, style_arr
+        ref_output = encode(str(wav_path))
     except Exception as e:
-        print(f"[VieNeu SDK] Trích xuất reference qua SDK cảnh báo: {e}")
+        print(f"[VieNeu SDK ERROR] encode_reference thất bại: {e}", file=sys.stderr)
+        raise HTTPException(status_code=500, detail="VieNeu SDK encode_reference thất bại")
 
-    # Fallback khi chạy mô phỏng kiểm thử độc lập không có GPU/SDK:
-    # Mô phỏng đúng kiến trúc VieNeu v3 Nano: embedding 192 chiều, style matrix 50x256
-    with wave.open(str(wav_path), 'rb') as wf:
-        n_frames = wf.getnframes()
-        data = wf.readframes(n_frames)
-        samples = np.frombuffer(data, dtype=np.int16).astype(np.float32) / 32768.0
+    if isinstance(ref_output, tuple) and len(ref_output) >= 2:
+        emb, style = ref_output[0], ref_output[1]
+    elif isinstance(ref_output, dict):
+        emb = _pick(ref_output, "embedding", "speaker_embedding", "emb")
+        style = _pick(ref_output, "style", "style_embedding")
+    else:
+        raise HTTPException(status_code=500, detail=f"encode_reference trả về kiểu không hỗ trợ: {type(ref_output).__name__}")
 
-    fft_vals = np.abs(np.fft.rfft(samples[:16384])) if len(samples) > 2048 else np.zeros(192, dtype=np.float32)
-    step = max(1, len(fft_vals) // 192)
-    emb_arr = np.array([np.mean(fft_vals[i*step:(i+1)*step]) for i in range(192)], dtype=np.float32)
-    norm = np.linalg.norm(emb_arr)
-    if norm > 1e-6:
-        emb_arr = emb_arr / norm
+    if emb is None or style is None:
+        raise HTTPException(status_code=500, detail="encode_reference thiếu embedding hoặc style")
 
-    style_arr = np.zeros((50, 256), dtype=np.float32)
+    emb_arr = np.asarray(emb, dtype=np.float32)
+    style_arr = np.asarray(style, dtype=np.float32)
+    if emb_arr.shape != EXPECTED_EMB_SHAPE or style_arr.shape != EXPECTED_STYLE_SHAPE:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Shape không khớp v3nano: emb={emb_arr.shape} (cần {EXPECTED_EMB_SHAPE}), style={style_arr.shape} (cần {EXPECTED_STYLE_SHAPE})"
+        )
+    if not (np.all(np.isfinite(emb_arr)) and np.all(np.isfinite(style_arr))):
+        raise HTTPException(status_code=500, detail="Embedding/style chứa NaN/Inf")
     return emb_arr, style_arr
 
 
@@ -246,7 +242,7 @@ def _sync_extract_worker(audio_bytes: bytes, target_npz: Path, ref_id: str, gend
     Worker đồng bộ chạy trong thread riêng (asyncio.to_thread) để không block event loop
     """
     clean_wav_path = None
-    tmp_npz = target_npz.with_suffix(f".tmp_{os.getpid()}_{int(asyncio.get_event_loop().time()*1000)}.npz")
+    tmp_npz = target_npz.with_suffix(f".tmp_{os.getpid()}_{uuid.uuid4().hex}.npz")
     try:
         clean_wav_path = normalize_audio_to_wav(audio_bytes)
         total_dur, speech_dur = analyze_audio_duration_and_speech(clean_wav_path)
@@ -309,8 +305,12 @@ def _sync_synthesize_worker(text: str, speaker_embedding: Optional[np.ndarray], 
     Worker đồng bộ chạy trong thread riêng (asyncio.to_thread) để không block event loop
     """
     global vieneu_model
-    out_wav_path = Path(tempfile.mktemp(suffix=".wav"))
-    out_mp3_path = Path(tempfile.mktemp(suffix=".mp3"))
+    fd_wav, wav_name = tempfile.mkstemp(suffix=".wav")
+    os.close(fd_wav)
+    fd_mp3, mp3_name = tempfile.mkstemp(suffix=".mp3")
+    os.close(fd_mp3)
+    out_wav_path = Path(wav_name)
+    out_mp3_path = Path(mp3_name)
 
     try:
         if speaker_embedding is not None:
@@ -334,7 +334,7 @@ def _sync_synthesize_worker(text: str, speaker_embedding: Optional[np.ndarray], 
             else:
                 raise HTTPException(status_code=500, detail="VieNeu model thiếu phương thức suy luận")
 
-        if not out_wav_path.exists():
+        if not out_wav_path.exists() or out_wav_path.stat().st_size == 0:
             raise HTTPException(status_code=500, detail="VieNeu không thể xuất file âm thanh")
 
         subprocess.run([
@@ -408,11 +408,16 @@ async def extract_embedding(req: ExtractEmbeddingRequest):
         )
 
     clean_b64 = req.audio_base64.split(",")[-1]
+    if len(clean_b64) > MAX_AUDIO_B64_CHARS:
+        raise HTTPException(status_code=413, detail=f"File âm thanh quá lớn (tối đa {MAX_AUDIO_BYTES // 1024}KB)")
     try:
         import base64
         audio_bytes = base64.b64decode(clean_b64)
     except Exception:
         raise HTTPException(status_code=400, detail="Dữ liệu audio_base64 không hợp lệ")
+
+    if len(audio_bytes) > MAX_AUDIO_BYTES:
+        raise HTTPException(status_code=413, detail=f"File âm thanh quá lớn (tối đa {MAX_AUDIO_BYTES // 1024}KB)")
 
     if len(audio_bytes) < 1000:
         raise HTTPException(status_code=400, detail="File âm thanh quá ngắn hoặc không có dữ liệu")
@@ -439,6 +444,8 @@ async def synthesize(req: SynthesizeRequest):
     text = req.text.strip()
     if not text:
         raise HTTPException(status_code=400, detail="Thiếu văn bản cần đọc")
+    if len(text) > MAX_TEXT_CHARS:
+        raise HTTPException(status_code=400, detail=f"Văn bản quá dài (tối đa {MAX_TEXT_CHARS} ký tự)")
 
     target_ref_id = req.ref_id or req.refId
     speaker_embedding = None
@@ -458,8 +465,11 @@ async def synthesize(req: SynthesizeRequest):
                         detail=f"Artifact engine không khớp! Yêu cầu 'vieneu-v3-nano', nhận được '{artifact_engine}'"
                     )
                 speaker_embedding = np.array(artifact_data["embedding"])
-                if "style" in artifact_data:
-                    speaker_style = np.array(artifact_data["style"])
+                if "style" not in artifact_data.files:
+                    raise HTTPException(status_code=500, detail="Artifact thiếu style")
+                speaker_style = np.array(artifact_data["style"])
+                if speaker_embedding.shape != EXPECTED_EMB_SHAPE or speaker_style.shape != EXPECTED_STYLE_SHAPE:
+                    raise HTTPException(status_code=500, detail="Artifact sai shape v3nano")
         except HTTPException:
             raise
         except Exception as e:
