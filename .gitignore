@@ -23,6 +23,10 @@
 # misc
 .DS_Store
 *.pem
+.cache/
+scratch/sync_to_vps.cjs
+scratch/*.pem
+scratch/*.key
 
 # debug
 npm-debug.log*
