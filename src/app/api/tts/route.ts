@@ -239,8 +239,8 @@ async function synthesizeEdge(
   return Buffer.concat(audioBuffers);
 }
 
-// Helper gọi dịch vụ Python TTS nội bộ trên VPS (Port 8005) - Chỉ gửi ref_id, KHÔNG gửi path
-async function fetchPythonTts(payload: { text: string; ref_id: string }): Promise<Buffer | null> {
+// Helper gọi dịch vụ Python TTS nội bộ trên VPS (Port 8005) - Hỗ trợ cả giọng Clone (ref_id) và Preset (voice)
+async function fetchPythonTts(payload: { text: string; ref_id?: string; voice?: string }): Promise<Buffer | null> {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 45000);
@@ -293,6 +293,9 @@ export async function GET(req: NextRequest) {
         break;
       case 'microx':
         cacheKeyPart = `microx:${voiceConfig.voiceId}:${creativity}`;
+        break;
+      case 'vieneu-preset':
+        cacheKeyPart = `vieneu-preset:${voiceConfig.id}`;
         break;
     }
     const cacheKey = crypto
@@ -358,6 +361,23 @@ export async function GET(req: NextRequest) {
           );
         }
         actualSource = `vieneu-clone-${voiceConfig.refId}`;
+        break;
+      }
+
+      case 'vieneu-preset': {
+        // Gửi sang Python service với voice (tên preset chuẩn)
+        audioBuffer = await fetchPythonTts({ text, voice: voiceConfig.id });
+        if (!audioBuffer) {
+          return new NextResponse(
+            JSON.stringify({
+              error: 'Dịch vụ phân tích & đọc giọng VieNeu v3 Nano (cổng 8005) đang bận hoặc chưa tải xong model.',
+              code: 'VIENEU_NOT_READY',
+              preset: voiceConfig.id,
+            }),
+            { status: 503, headers: { 'Content-Type': 'application/json' } }
+          );
+        }
+        actualSource = `vieneu-preset-${voiceConfig.id}`;
         break;
       }
 

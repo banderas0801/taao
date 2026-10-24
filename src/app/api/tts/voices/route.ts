@@ -1,8 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getMicroXAccount, getMicroXVoices } from '@/lib/microxTts';
+import { VIENEU_PRESET_VOICES } from '@/data/voices';
+
+// 11 Giọng VieNeu v3 Nano chính thức
+const VIENEU_VOICES_CURATED = VIENEU_PRESET_VOICES.map((v) => ({
+  id: v.id,
+  name: v.name,
+  label: `${v.gender === 'male' ? '🎙️' : '🌸'} ${v.name} (VieNeu ${v.regionLabel})`,
+  desc: v.tagline,
+  gender: v.gender,
+  provider: 'vieneu',
+}));
 
 // Danh sách giọng đọc tuyển chọn chuyên đọc truyện hay nhất
 export const CURATED_VOICES = [
+  ...VIENEU_VOICES_CURATED,
   {
     id: 'voice_717f9e7c4a371d668b7dd242',
     name: 'Ngọc Ngạn',

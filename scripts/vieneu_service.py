@@ -16,6 +16,7 @@ Bảo mật, Ổn định & Pháp lý theo Blueprint hoàn chỉnh:
 8. Không block asyncio event loop: Bọc các tác vụ nặng (ffmpeg, trích xuất embedding, VAD, suy luận tts) trong asyncio.to_thread.
 9. Bảo vệ 1 vCPU bằng hàng đợi tuần tự asyncio.Lock() và os.nice(10) trực tiếp trong tiến trình.
 10. Mode bắt buộc: Vieneu(mode="v3nano"), /health chỉ báo 200 khi model đã thực sự nạp vào RAM.
+11. Hỗ trợ đầy đủ 11 giọng đọc Preset có sẵn từ SDK VieNeu v3 Nano qua GET /presets và POST /synthesize.
 """
 
 import os
@@ -105,6 +106,16 @@ def init_model():
         print("[VieNeu] Đang nạp model Vieneu(mode='v3nano')...")
         vieneu_model = Vieneu(mode="v3nano")
         print("[VieNeu] ✅ Nạp thành công VieNeu v3 Nano vào RAM.")
+
+        # Tải sẵn các mô hình clone (speaker_encoder, codec_encoder, reference_encoder) ngay khi khởi động
+        # để lần clone đầu tiên của người dùng không bị timeout (quá 90s)
+        try:
+            if hasattr(vieneu_model, "engine") and hasattr(vieneu_model.engine, "_ensure_clone_sessions"):
+                print("[VieNeu] Đang nạp sẵn các session clone (speaker_encoder, codec_encoder, reference_encoder)...")
+                vieneu_model.engine._ensure_clone_sessions()
+                print("[VieNeu] ✅ Đã nạp sẵn toàn bộ mô hình clone vào cache.")
+        except Exception as e_clone:
+            print(f"[VieNeu Warning] Không thể nạp trước session clone ({e_clone}). Clone sẽ tải lười (lazy load).")
     except Exception as err:
         print(f"[VieNeu FATAL] Lỗi nạp model v3nano: {err}", file=sys.stderr)
         print("[VieNeu FATAL] Thoát tiến trình ngay lập tức (sys.exit 1) để PM2 ghi nhận lỗi!", file=sys.stderr)
@@ -156,7 +167,6 @@ def analyze_audio_duration_and_speech(wav_path: Path) -> Tuple[float, float]:
             speech_duration = active_speech_frames / float(framerate)
             return round(total_duration, 2), round(speech_duration, 2)
     except Exception as e:
-        # Không đoán thời lượng tiếng nói: WAV không đọc được -> 400
         raise HTTPException(status_code=400, detail=f"Không đọc được file WAV đã chuẩn hoá: {e}")
 
 
@@ -180,7 +190,10 @@ def normalize_audio_to_wav(input_bytes: bytes) -> Path:
             "-c:a", "pcm_s16le",
             tmp_out_path
         ]
-        subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+        try:
+            subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+        except subprocess.CalledProcessError as e:
+            raise HTTPException(status_code=400, detail="Không thể giải mã dữ liệu âm thanh (ffmpeg error)")
         return Path(tmp_out_path)
     finally:
         if tmp_in_path and os.path.exists(tmp_in_path):
@@ -300,7 +313,12 @@ def _sync_extract_worker(audio_bytes: bytes, target_npz: Path, ref_id: str, gend
                 pass
 
 
-def _sync_synthesize_worker(text: str, speaker_embedding: Optional[np.ndarray], speaker_style: Optional[np.ndarray]) -> bytes:
+def _sync_synthesize_worker(
+    text: str,
+    speaker_embedding: Optional[np.ndarray] = None,
+    speaker_style: Optional[np.ndarray] = None,
+    preset_voice: Optional[str] = None
+) -> bytes:
     """
     Worker đồng bộ chạy trong thread riêng (asyncio.to_thread) để không block event loop
     """
@@ -313,29 +331,29 @@ def _sync_synthesize_worker(text: str, speaker_embedding: Optional[np.ndarray], 
     out_mp3_path = Path(mp3_name)
 
     try:
-        if speaker_embedding is not None:
-            if hasattr(vieneu_model, "infer"):
-                audio = vieneu_model.infer(text=text, prompt=speaker_embedding, style=speaker_style)
-                vieneu_model.save(audio, str(out_wav_path))
-            elif hasattr(vieneu_model, "tts"):
-                vieneu_model.tts(
-                    text=text,
-                    prompt_embedding=speaker_embedding,
-                    output_path=str(out_wav_path)
-                )
-            else:
-                raise HTTPException(status_code=500, detail="VieNeu model thiếu phương thức suy luận")
+        if speaker_embedding is not None and speaker_style is not None:
+            # Chế độ Voice Cloning: truyền voice={'speaker_emb': ..., 'style': ...}
+            audio = vieneu_model.infer(text=text, voice={"speaker_emb": speaker_embedding, "style": speaker_style})
+        elif preset_voice is not None:
+            # Chế độ Preset Voice: truyền voice=tên giọng preset (ví dụ 'Minh Quân', 'Adam', v.v.)
+            audio = vieneu_model.infer(text=text, voice=preset_voice)
         else:
-            if hasattr(vieneu_model, "infer"):
-                audio = vieneu_model.infer(text=text)
-                vieneu_model.save(audio, str(out_wav_path))
-            elif hasattr(vieneu_model, "tts"):
-                vieneu_model.tts(text=text, output_path=str(out_wav_path))
-            else:
-                raise HTTPException(status_code=500, detail="VieNeu model thiếu phương thức suy luận")
+            # Mặc định của model
+            audio = vieneu_model.infer(text=text)
+
+        if audio is None or len(audio) == 0:
+            raise HTTPException(status_code=500, detail="VieNeu không thể xuất dữ liệu âm thanh")
+
+        # Lưu audio numpy array (float32 [-1.0, 1.0], 24000Hz) thành WAV 16-bit PCM tiêu chuẩn
+        pcm16 = (np.clip(audio, -1.0, 1.0) * 32767.0).astype(np.int16)
+        with wave.open(str(out_wav_path), "wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(24000)
+            wf.writeframes(pcm16.tobytes())
 
         if not out_wav_path.exists() or out_wav_path.stat().st_size == 0:
-            raise HTTPException(status_code=500, detail="VieNeu không thể xuất file âm thanh")
+            raise HTTPException(status_code=500, detail="VieNeu không thể tạo file âm thanh WAV")
 
         subprocess.run([
             "ffmpeg", "-y", "-i", str(out_wav_path),
@@ -370,6 +388,7 @@ class SynthesizeRequest(BaseModel):
     text: str = Field(..., description="Văn bản cần đọc")
     ref_id: Optional[str] = Field(None, description="Mã định danh giọng clone")
     refId: Optional[str] = Field(None, description="Mã định danh camelCase")
+    voice: Optional[str] = Field(None, description="Tên giọng Preset VieNeu")
 
 
 @app.get("/health")
@@ -389,6 +408,27 @@ def health(response: Response):
         "engine": "VieNeu v3 Nano",
         "model_loaded": True,
         "is_busy": vieneu_lock.locked()
+    }
+
+
+@app.get("/presets")
+def get_presets():
+    """
+    GET /presets: Trả về danh sách 11 giọng đọc có sẵn của VieNeu v3 Nano
+    """
+    if vieneu_model is None:
+        raise HTTPException(status_code=503, detail="VieNeu model chưa sẵn sàng")
+    presets = getattr(vieneu_model, "_preset_voices", {})
+    return {
+        "presets": [
+            {
+                "id": name,
+                "name": name,
+                "gender": v.get("gender", ""),
+                "description": v.get("description", ""),
+            }
+            for name, v in presets.items()
+        ]
     }
 
 
@@ -437,9 +477,9 @@ async def extract_embedding(req: ExtractEmbeddingRequest):
 async def synthesize(req: SynthesizeRequest):
     """
     POST /synthesize:
-    - Nạp {ref_id}.npz bằng np.load(..., allow_pickle=False)
-    - Xác thực nghiêm ngặt engine: 'vieneu-v3-nano'
-    - Xử lý qua asyncio.to_thread trong khóa tuần tự vieneu_lock
+    - Nếu có ref_id / refId: Nạp {ref_id}.npz bằng np.load(..., allow_pickle=False), xác thực engine: 'vieneu-v3-nano'
+    - Nếu có voice: Đọc theo giọng Preset của VieNeu v3 Nano
+    - Xử lý qua asyncio.to_thread trong khóa tuần tự vieneu_lock để bảo vệ 1 vCPU
     """
     text = req.text.strip()
     if not text:
@@ -448,6 +488,7 @@ async def synthesize(req: SynthesizeRequest):
         raise HTTPException(status_code=400, detail=f"Văn bản quá dài (tối đa {MAX_TEXT_CHARS} ký tự)")
 
     target_ref_id = req.ref_id or req.refId
+    preset_name = req.voice
     speaker_embedding = None
     speaker_style = None
 
@@ -475,12 +516,21 @@ async def synthesize(req: SynthesizeRequest):
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Lỗi nạp artifact giọng: {e}")
 
+    elif preset_name:
+        available_presets = getattr(vieneu_model, "_preset_voices", {})
+        if preset_name not in available_presets:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Giọng preset '{preset_name}' không tồn tại. Danh sách có sẵn: {list(available_presets.keys())}"
+            )
+
     async with vieneu_lock:
         mp3_bytes = await asyncio.to_thread(
             _sync_synthesize_worker,
             text,
             speaker_embedding,
-            speaker_style
+            speaker_style,
+            preset_name
         )
         return Response(content=mp3_bytes, media_type="audio/mpeg")
 

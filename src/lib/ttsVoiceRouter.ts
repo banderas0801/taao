@@ -10,13 +10,85 @@ import audioThresholdsJson from '@/data/audio_thresholds.json';
 declare const RefIdBrand: unique symbol;
 export type RefId = string & { readonly [RefIdBrand]: true };
 
+// 11 Giọng Preset chính thức từ SDK VieNeu v3 Nano (Đã xác thực 100% trên VPS)
+export const VIENEU_PRESET_NAMES = [
+  'Adam',
+  'Ái Hân',
+  'Mỹ Duyên',
+  'Đức Trí',
+  'Hữu Quân',
+  'Xuân Tiên',
+  'Mai Anh',
+  'Trúc Ly',
+  'Anh Khôi',
+  'Minh Quân',
+  'Mạnh Dũng',
+] as const;
+
+export type VieneuPresetId = (typeof VIENEU_PRESET_NAMES)[number];
+
 export type Voice =
   | { kind: 'edge'; edgeVoice: string; pitch?: string; rate?: string }
   | { kind: 'clone'; refId: RefId }
-  | { kind: 'microx'; voiceId: string };
+  | { kind: 'microx'; voiceId: string }
+  | { kind: 'vieneu-preset'; id: VieneuPresetId };
 
 export const REF_ID_REGEX = /^[a-z0-9_-]{8,40}$/;
 export const SSML_PITCH_RATE_REGEX = /^[+-]\d{1,3}%$/;
+
+// Bảng ánh xạ linh hoạt từ các định dạng ID người dùng/client sang đúng tên Preset của SDK
+export const VIENEU_PRESET_MAP: Record<string, VieneuPresetId> = {
+  // Tên gốc
+  'adam': 'Adam',
+  'ái hân': 'Ái Hân',
+  'mỹ duyên': 'Mỹ Duyên',
+  'đức trí': 'Đức Trí',
+  'hữu quân': 'Hữu Quân',
+  'xuân tiên': 'Xuân Tiên',
+  'mai anh': 'Mai Anh',
+  'trúc ly': 'Trúc Ly',
+  'anh khôi': 'Anh Khôi',
+  'minh quân': 'Minh Quân',
+  'mạnh dũng': 'Mạnh Dũng',
+
+  // ID kèm tiền tố vieneu_
+  'vieneu_adam': 'Adam',
+  'vieneu_ai_han': 'Ái Hân',
+  'vieneu_my_duyen': 'Mỹ Duyên',
+  'vieneu_duc_tri': 'Đức Trí',
+  'vieneu_huu_quan': 'Hữu Quân',
+  'vieneu_xuan_tien': 'Xuân Tiên',
+  'vieneu_mai_anh': 'Mai Anh',
+  'vieneu_truc_ly': 'Trúc Ly',
+  'vieneu_anh_khoi': 'Anh Khôi',
+  'vieneu_minh_quan': 'Minh Quân',
+  'vieneu_manh_dung': 'Mạnh Dũng',
+
+  // ID kèm tiền tố vn_
+  'vn_adam': 'Adam',
+  'vn_ai_han': 'Ái Hân',
+  'vn_my_duyen': 'Mỹ Duyên',
+  'vn_duc_tri': 'Đức Trí',
+  'vn_huu_quan': 'Hữu Quân',
+  'vn_xuan_tien': 'Xuân Tiên',
+  'vn_mai_anh': 'Mai Anh',
+  'vn_truc_ly': 'Trúc Ly',
+  'vn_anh_khoi': 'Anh Khôi',
+  'vn_minh_quan': 'Minh Quân',
+  'vn_manh_dung': 'Mạnh Dũng',
+
+  // Slugs truyền thống
+  'ai-han': 'Ái Hân',
+  'my-duyen': 'Mỹ Duyên',
+  'duc-tri': 'Đức Trí',
+  'huu-quan': 'Hữu Quân',
+  'xuan-tien': 'Xuân Tiên',
+  'mai-anh': 'Mai Anh',
+  'truc-ly': 'Trúc Ly',
+  'anh-khoi': 'Anh Khôi',
+  'minh-quan': 'Minh Quân',
+  'manh-dung': 'Mạnh Dũng',
+};
 
 // Danh sách Whitelist giọng MicroX cho phép (Bao gồm giọng mặc định Duy Onyx)
 export const ALLOWED_MICROX_VOICE_IDS = new Set([
@@ -64,23 +136,17 @@ function validateSsmlParam(param?: string, paramName = 'param'): string | undefi
 }
 
 const LEGACY_MALE_VOICES = new Set([
-  'anh-khoi',
   'thien-tam-duc',
   'thai-son',
   'quoc-tuan',
-  'manh-dung',
   'thien-minh',
   'pham-tuyen',
   'hai-dang',
-  'duc-tri',
   'quang-son',
   'minh-duc',
   'minh-triet',
-  'minh-quan',
   'tuan-kiet',
-  'adam',
   'adam-bua',
-  'huu-quan',
   'thanh-binh',
 ]);
 
@@ -89,12 +155,8 @@ const LEGACY_FEMALE_VOICES = new Set([
   'ngoc-linh',
   'thuy-diem',
   'ngoc-tran',
-  'truc-ly',
   'kim-thanh',
-  'mai-anh',
-  'my-duyen',
   'quynh-anh',
-  'xuan-tien',
   'ngoc-huyen',
 ]);
 
@@ -133,6 +195,15 @@ export function resolveVoice(
     return {
       kind: 'microx',
       voiceId: cleanId,
+    };
+  }
+
+  // 3. Giọng Preset VieNeu v3 Nano (11 giọng chuẩn chính thức từ SDK)
+  const matchedPreset = VIENEU_PRESET_MAP[voice];
+  if (matchedPreset) {
+    return {
+      kind: 'vieneu-preset',
+      id: matchedPreset,
     };
   }
 

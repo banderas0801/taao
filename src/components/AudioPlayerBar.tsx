@@ -54,24 +54,40 @@ export interface VoiceItem {
   name: string;
   label: string;
   desc: string;
-  provider?: 'microx' | 'edge' | 'google' | 'custom';
+  provider?: 'microx' | 'edge' | 'google' | 'custom' | 'vieneu';
   gender?: 'female' | 'male';
   region?: string;
 }
 
-// 1. Kho Giọng Microsoft Edge Neural Gốc
+// 1. Kho 11 Giọng VieNeu v3 Nano Chuẩn (24kHz Flow-Matching)
 const NANO_VOICES: VoiceItem[] = LAZIBOOK_NANO_VOICES.map((v) => ({
   id: v.id,
   name: v.name,
   label: `${v.gender === 'male' ? '🎙️' : '🌸'} ${v.name} (${v.regionLabel})`,
   desc: v.tagline,
-  provider: 'custom',
+  provider: 'vieneu',
   gender: v.gender,
   region: v.region,
 }));
 
-// 2. Giọng Google & Kể Chuyện Phong Cách
+// 2. Giọng Edge Neural Chuẩn & Kể Chuyện Phong Cách
 const STANDARD_VOICES: VoiceItem[] = [
+  {
+    id: 'namminh',
+    name: 'Nam Minh',
+    label: '🎙️ Nam Minh (Microsoft Edge AI)',
+    desc: 'Giọng đọc nam Bắc Microsoft Edge Neural đĩnh đạc, rõ nét',
+    provider: 'edge',
+    gender: 'male',
+  },
+  {
+    id: 'hoaimy',
+    name: 'Hoài My',
+    label: '🌸 Hoài My (Microsoft Edge AI)',
+    desc: 'Giọng đọc nữ Bắc Microsoft Edge Neural trong trẻo, truyền cảm',
+    provider: 'edge',
+    gender: 'female',
+  },
   {
     id: 'story-male',
     name: 'Kể Chuyện Đêm (Nam Trầm)',
@@ -1216,12 +1232,12 @@ export default function AudioPlayerBar({
                 </div>
               )}
 
-              {/* TAB 1: KHO 29 GIỌNG NANO */}
+              {/* TAB 1: KHO 11 GIỌNG VIENEU V3 NANO CHUẨN */}
               {voiceTab === 'nano' && (
                 <>
                   <div className="text-[10px] font-bold text-amber-400 uppercase tracking-wider px-2 pt-1 pb-0.5 flex items-center justify-between">
-                    <span>🎙️ 29 Giọng VieNeu Nano ({filteredNanoVoices.length})</span>
-                    <span className="text-neutral-400 lowercase font-normal">VieNeu Engine • Miễn phí</span>
+                    <span>🎙️ 11 Giọng VieNeu v3 Nano ({filteredNanoVoices.length})</span>
+                    <span className="text-neutral-400 lowercase font-normal">VieNeu v3 Nano • Miễn phí</span>
                   </div>
                   {filteredNanoVoices.map((v) => (
                     <button

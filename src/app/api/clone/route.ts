@@ -28,6 +28,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Dữ liệu âm thanh quá ngắn hoặc không hợp lệ' }, { status: 400 });
     }
 
+    // Chặn ngay tại tầng Route: Không chấp nhận file vượt quá 2MB để bảo vệ RAM
+    const MAX_AUDIO_BYTES = 2 * 1024 * 1024;
+    if (audioBuffer.length > MAX_AUDIO_BYTES) {
+      return NextResponse.json(
+        { success: false, error: `Dữ liệu âm thanh quá lớn (tối đa ${MAX_AUDIO_BYTES / 1024 / 1024}MB)` },
+        { status: 413 }
+      );
+    }
+
     // 1. Server TỰ SINH refId chuẩn bảo mật: regex ^[a-z0-9_-]{8,40}$
     // Định dạng: c_<random8hex>_<timestampBase36> (khoảng 22 ký tự, toàn chữ thường, số, _)
     const randPart = crypto.randomBytes(4).toString('hex');
@@ -44,9 +53,11 @@ export async function POST(req: NextRequest) {
     // 2. Gửi sang dịch vụ Python VieNeu v3 Nano nội bộ (Port 8005)
     let pythonProfile: any = null;
     let pyErrorDetail: string | null = null;
+    let pyStatusCode = 503;
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 20000);
+      // Nâng thời gian chờ lên 90s để hỗ trợ tải mô hình clone lần đầu trên VPS 1 vCPU
+      const timeoutId = setTimeout(() => controller.abort(), 90000);
 
       const vieneuBase = process.env.VIENEU_SERVICE_URL || 'http://127.0.0.1:8005';
       const pyRes = await fetch(`${vieneuBase}/extract_embedding`, {
@@ -64,21 +75,23 @@ export async function POST(req: NextRequest) {
       if (pyRes.ok) {
         pythonProfile = await pyRes.json();
       } else {
+        pyStatusCode = pyRes.status;
         const errJson = await pyRes.json().catch(() => null);
         pyErrorDetail = errJson?.detail || (await pyRes.text().catch(() => `HTTP ${pyRes.status}`));
       }
     } catch (e: any) {
-      pyErrorDetail = e.name === 'AbortError' ? 'Quá thời gian chờ (20s) từ dịch vụ VieNeu' : e.message;
+      pyErrorDetail = e.name === 'AbortError' ? 'Quá thời gian chờ (90s) từ dịch vụ VieNeu' : e.message;
+      pyStatusCode = 504;
       console.warn('Lỗi gọi Python extract_embedding:', pyErrorDetail);
     }
 
-    // NẾU PYTHON CHƯA CHẠY HOẶC MẪU KHÔNG ĐẠT: Báo lỗi rõ ràng, TUYỆT ĐỐI KHÔNG TẠO PROFILE GIẢ
+    // NẾU PYTHON CHƯA CHẠY HOẶC MẪU KHÔNG ĐẠT: Báo lỗi rõ ràng, giữ nguyên mã HTTP gốc của Python (400/409/413/500/504)
     if (!pythonProfile || pythonProfile.success === false) {
       return NextResponse.json({
         success: false,
         error: pyErrorDetail || 'Dịch vụ nhân bản giọng VieNeu v3 Nano chưa sẵn sàng hoặc mẫu âm thanh không đạt chuẩn.',
         details: pyErrorDetail,
-      }, { status: pyErrorDetail?.includes('Thời lượng') || pyErrorDetail?.includes('tiếng nói') ? 400 : 503 });
+      }, { status: pyStatusCode });
     }
 
     const isMale = pythonProfile?.is_male ?? (gender === 'male');

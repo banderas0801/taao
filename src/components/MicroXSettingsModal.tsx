@@ -18,12 +18,12 @@ import {
   Plus
 } from 'lucide-react';
 
-interface VoiceItem {
+export interface VoiceItem {
   id: string;
   name: string;
   label: string;
   desc: string;
-  provider?: 'microx' | 'edge' | 'google' | 'custom';
+  provider?: 'microx' | 'edge' | 'google' | 'custom' | 'vieneu';
   gender?: 'female' | 'male';
   region?: string;
   category?: string;

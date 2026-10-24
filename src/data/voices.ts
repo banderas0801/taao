@@ -16,7 +16,173 @@ export interface StudioVoice {
   isPopular?: boolean;
 }
 
-// 1. KHO GIỌNG MICROSOFT EDGE NEURAL GỐC (GIỮ NGUYÊN 100% ÂM SẮC GỐC, KHÔNG BÓP MÉO CAO ĐỘ)
+// 1. KHO 11 GIỌNG PRESET CHUẨN CỦA VIENEU V3 NANO (CHÂN THỰC 100%, 24KHZ FLOW-MATCHING)
+export const VIENEU_PRESET_VOICES: StudioVoice[] = [
+  {
+    id: 'vieneu_adam',
+    name: 'Adam',
+    code: 'AD',
+    gender: 'male',
+    region: 'nam',
+    regionLabel: 'Giọng Nam Bộ',
+    style: 'tu-nhien',
+    styleLabel: 'Tự nhiên hào sảng',
+    stars: 5,
+    avatarBg: 'bg-blue-600',
+    tagline: 'Giọng nam miền Nam tự nhiên, chân thực, phù hợp nghe truyện dài từ AI VieNeu v3 Nano.',
+    sampleText: 'Chào mừng bạn đến với không gian đọc truyện audio cùng hệ thống VieNeu v3 Nano.',
+    isPopular: true,
+  },
+  {
+    id: 'vieneu_ai_han',
+    name: 'Ái Hân',
+    code: 'AH',
+    gender: 'female',
+    region: 'nam',
+    regionLabel: 'Giọng Nữ Nam Bộ',
+    style: 'tin-tuc',
+    styleLabel: 'Phong cách tin tức',
+    stars: 5,
+    avatarBg: 'bg-rose-500',
+    tagline: 'Giọng nữ miền Nam phong cách tin tức, phát âm rõ ràng, mạch lạc từ AI VieNeu v3 Nano.',
+    sampleText: 'Bản tin văn học mạng hôm nay cập nhật những tình tiết gay cấn nhất.',
+    isPopular: true,
+  },
+  {
+    id: 'vieneu_my_duyen',
+    name: 'Mỹ Duyên',
+    code: 'MD',
+    gender: 'female',
+    region: 'bac',
+    regionLabel: 'Giọng Nữ Bắc Bộ',
+    style: 'doc-truyen',
+    styleLabel: 'Phong cách đọc truyện',
+    stars: 5,
+    avatarBg: 'bg-pink-600',
+    tagline: 'Giọng nữ miền Bắc chuyên đọc truyện, âm điệu dịu dàng truyền cảm và lắng đọng từ AI VieNeu v3 Nano.',
+    sampleText: 'Đêm nay trăng thanh gió mát, câu chuyện tình duyên xin được phép bắt đầu.',
+    isPopular: true,
+  },
+  {
+    id: 'vieneu_duc_tri',
+    name: 'Đức Trí',
+    code: 'DT',
+    gender: 'male',
+    region: 'bac',
+    regionLabel: 'Giọng Nam Bắc Bộ',
+    style: 'doc-truyen',
+    styleLabel: 'Phong cách đọc truyện',
+    stars: 5,
+    avatarBg: 'bg-amber-600',
+    tagline: 'Giọng nam miền Bắc chuyên đọc truyện, trầm ấm truyền cảm, thích hợp tiên hiệp và kiếm hiệp từ AI VieNeu v3 Nano.',
+    sampleText: 'Thiên địa vô tình, vạn vật giai vi sô cẩu, con đường tu tiên đầy gian nan trắc trở.',
+    isPopular: true,
+  },
+  {
+    id: 'vieneu_huu_quan',
+    name: 'Hữu Quân',
+    code: 'HQ',
+    gender: 'male',
+    region: 'bac',
+    regionLabel: 'Giọng Nam Bắc Bộ',
+    style: 'tin-tuc',
+    styleLabel: 'Phong cách tin tức',
+    stars: 5,
+    avatarBg: 'bg-indigo-600',
+    tagline: 'Giọng nam miền Bắc phong cách tin tức, đĩnh đạc và uy nghiêm từ AI VieNeu v3 Nano.',
+    sampleText: 'Bản tin đặc biệt thông báo đại điển thu nhận đệ tử chân truyền của các tông môn.',
+  },
+  {
+    id: 'vieneu_xuan_tien',
+    name: 'Xuân Tiên',
+    code: 'XT',
+    gender: 'female',
+    region: 'bac',
+    regionLabel: 'Giọng Nữ Bắc Bộ',
+    style: 'tin-tuc',
+    styleLabel: 'Phong cách tin tức',
+    stars: 5,
+    avatarBg: 'bg-purple-600',
+    tagline: 'Giọng nữ miền Bắc phong cách tin tức, thanh thoát và tự tin từ AI VieNeu v3 Nano.',
+    sampleText: 'Bản tin tổng hợp tình hình kinh tế và đời sống hôm nay.',
+  },
+  {
+    id: 'vieneu_mai_anh',
+    name: 'Mai Anh',
+    code: 'MA',
+    gender: 'female',
+    region: 'bac',
+    regionLabel: 'Giọng Nữ Bắc Bộ',
+    style: 'tin-tuc',
+    styleLabel: 'Phong cách tin tức',
+    stars: 5,
+    avatarBg: 'bg-emerald-600',
+    tagline: 'Giọng nữ miền Bắc phong cách tin tức, nhẹ nhàng rõ nét từ AI VieNeu v3 Nano.',
+    sampleText: 'Chào đón quý thính giả trở lại với chương trình audio hôm nay.',
+  },
+  {
+    id: 'vieneu_truc_ly',
+    name: 'Trúc Ly',
+    code: 'TL',
+    gender: 'female',
+    region: 'bac',
+    regionLabel: 'Giọng Nữ Bắc Bộ',
+    style: 'tu-nhien',
+    styleLabel: 'Tự nhiên nhẹ nhàng',
+    stars: 5,
+    avatarBg: 'bg-teal-600',
+    tagline: 'Giọng nữ miền Bắc tự nhiên thanh tao, thích hợp ngôn tình và đô thị từ AI VieNeu v3 Nano.',
+    sampleText: 'Cơn mưa rào đầu hạ tưới mát những kỷ niệm ngọt ngào thời thanh xuân.',
+    isPopular: true,
+  },
+  {
+    id: 'vieneu_anh_khoi',
+    name: 'Anh Khôi',
+    code: 'AK',
+    gender: 'male',
+    region: 'bac',
+    regionLabel: 'Giọng Nam Bắc Bộ',
+    style: 'ke-chuyen',
+    styleLabel: 'Phong cách kể chuyện',
+    stars: 5,
+    avatarBg: 'bg-slate-700',
+    tagline: 'Giọng nam miền Bắc chuyên kể chuyện, lôi cuốn ma mị, giàu kịch tính từ AI VieNeu v3 Nano.',
+    sampleText: 'Lúc nửa đêm, tiếng bước chân dồn dập vang lên nơi hành lang vắng lặng.',
+    isPopular: true,
+  },
+  {
+    id: 'vieneu_minh_quan',
+    name: 'Minh Quân',
+    code: 'MQ',
+    gender: 'male',
+    region: 'bac',
+    regionLabel: 'Giọng Nam Bắc Bộ',
+    style: 'tu-nhien',
+    styleLabel: 'Tự nhiên trầm ấm',
+    stars: 5,
+    avatarBg: 'bg-sky-600',
+    tagline: 'Giọng nam miền Bắc tự nhiên, ấm áp, thân thiện và gần gũi từ AI VieNeu v3 Nano.',
+    sampleText: 'Hành trình phiêu lưu kỳ thú của chúng ta hôm nay sẽ bước sang một trang mới.',
+    isPopular: true,
+  },
+  {
+    id: 'vieneu_manh_dung',
+    name: 'Mạnh Dũng',
+    code: 'MD',
+    gender: 'male',
+    region: 'bac',
+    regionLabel: 'Giọng Nam Bắc Bộ',
+    style: 'tu-nhien',
+    styleLabel: 'Nội lực dũng mãnh',
+    stars: 5,
+    avatarBg: 'bg-red-700',
+    tagline: 'Giọng nam miền Bắc dũng mãnh, đầy nội lực hào sảng, đỉnh cao truyện hành động, mạt thế từ AI VieNeu v3 Nano.',
+    sampleText: 'Tiếng gầm thét vang dội xé toạc màn đêm u tối của chiến trường sinh tử.',
+    isPopular: true,
+  },
+];
+
+// 2. KHO GIỌNG MICROSOFT EDGE NEURAL GỐC (GIỮ NGUYÊN 100% ÂM SẮC GỐC, KHÔNG BÓP MÉO CAO ĐỘ)
 export const EDGE_STUDIO_VOICES: StudioVoice[] = [
   {
     id: 'namminh',
@@ -163,15 +329,32 @@ export const MICROX_STUDIO_VOICES: StudioVoice[] = [
   },
 ];
 
-// Alias tương thích ngược để không làm hỏng code cũ
-export const LAZIBOOK_NANO_VOICES = EDGE_STUDIO_VOICES;
+// Danh mục đầy đủ tất cả các giọng trong hệ thống
+export const ALL_STUDIO_VOICES: StudioVoice[] = [
+  ...VIENEU_PRESET_VOICES,
+  ...EDGE_STUDIO_VOICES,
+  ...MICROX_STUDIO_VOICES,
+];
+
+// Alias tương thích ngược trỏ trực tiếp vào 11 giọng VieNeu v3 Nano
+export const LAZIBOOK_NANO_VOICES = VIENEU_PRESET_VOICES;
 
 export function getVoiceById(id: string): StudioVoice | undefined {
   if (!id) return undefined;
   const cleanId = id.replace(/^mx_/, '').toLowerCase().trim();
   const normalized = cleanId.replace(/_/g, '-');
   return (
-    EDGE_STUDIO_VOICES.find((v) => v.id.toLowerCase() === cleanId || v.id.toLowerCase() === normalized) ||
-    MICROX_STUDIO_VOICES.find((v) => v.id.toLowerCase() === cleanId || v.id.toLowerCase() === normalized)
+    VIENEU_PRESET_VOICES.find(
+      (v) =>
+        v.id.toLowerCase() === cleanId ||
+        v.id.toLowerCase() === normalized ||
+        v.name.toLowerCase() === cleanId
+    ) ||
+    EDGE_STUDIO_VOICES.find(
+      (v) => v.id.toLowerCase() === cleanId || v.id.toLowerCase() === normalized
+    ) ||
+    MICROX_STUDIO_VOICES.find(
+      (v) => v.id.toLowerCase() === cleanId || v.id.toLowerCase() === normalized
+    )
   );
 }
