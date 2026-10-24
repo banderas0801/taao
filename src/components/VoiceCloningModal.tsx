@@ -58,7 +58,7 @@ export default function VoiceCloningModal({
   const [isRecording, setIsRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const recordIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const recordIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
   // Tệp âm thanh đã nạp

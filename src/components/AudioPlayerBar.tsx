@@ -256,7 +256,7 @@ export default function AudioPlayerBar({
   const deckBRef = useRef<HTMLAudioElement | null>(null);
   const activeDeckRef = useRef<'A' | 'B'>('A');
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
-  const handoverTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const handoverTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const currentIndexRef = useRef<number>(activeSentenceIndex);
   const selectedVoiceRef = useRef<string>(selectedVoice);

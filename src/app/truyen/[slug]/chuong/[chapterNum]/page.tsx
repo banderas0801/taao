@@ -82,7 +82,7 @@ function ChapterReaderContent() {
   const articleRef = React.useRef<HTMLElement | null>(null);
   const isPinchingRef = React.useRef(false);
   const [zoomFeedback, setZoomFeedback] = useState<{ visible: boolean; size: number } | null>(null);
-  const zoomFeedbackTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+  const zoomFeedbackTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const triggerZoomFeedback = useCallback((size: number) => {
     setZoomFeedback({ visible: true, size });
@@ -1137,7 +1137,7 @@ function ChapterReaderContent() {
                     id={`reader-toc-item-${c.number}`}
                     onClick={() => {
                       setShowToc(false);
-                      router.push(`/truyen/${story.slug}/chuong/${c.number}`);
+                      router.push(`/truyen/${story?.slug || slug}/chuong/${c.number}`);
                     }}
                     className={`w-full text-left p-2.5 rounded-xl text-xs font-semibold flex items-center justify-between transition ${
                       isCurrent
